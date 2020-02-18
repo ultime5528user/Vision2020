@@ -45,7 +45,7 @@ public class Pipeline implements VisionPipeline {
 
     public static NetworkTableInstance ntinst;
     public static NetworkTableEntry snapshotEntry;
-    public static NetworkTableEntry angleEntry;
+    public static NetworkTableEntry timestampEntry;
 
     /**
      * le format "timestamp<long>;found<boolean>;centreX<double>;hauteur<double>"
@@ -56,12 +56,12 @@ public class Pipeline implements VisionPipeline {
         ntinst.setUpdateRate(10);
 
         snapshotEntry = ntinst.getTable("Vision").getEntry("Snapshot");
-        angleEntry = ntinst.getTable("Vision").getEntry("RobotAngle");
+        timestampEntry = ntinst.getTable("Vision").getEntry("Timestamp");
     }
 
     @Override
     public void process(Mat in) {
-        double angle = angleEntry.getNumber(0).doubleValue();
+        long timestamp = timestampEntry.getNumber(0).longValue();
         
         // Flou
         // Gaussian
@@ -94,7 +94,7 @@ public class Pipeline implements VisionPipeline {
             drawParticuleData(in, p, kRed, 2);
         });
 
-        snapshotEntry.setString(angle + ";" + best.isPresent() + ";" + best.orElse(null).x + ";" + best.orElse(null).height);
+        snapshotEntry.setString(timestamp + ";" + found + ";" + x + ";" + h);
 
         // draw on original and send to nt?
 
