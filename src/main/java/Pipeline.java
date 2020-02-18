@@ -47,6 +47,11 @@ public class Pipeline implements VisionPipeline {
     public static NetworkTableEntry snapshotEntry;
     public static NetworkTableEntry timestampEntry;
 
+
+    boolean found;
+    double x;
+    double h;
+
     /**
      * le format "timestamp<long>;found<boolean>;centreX<double>;hauteur<double>"
     */
@@ -69,13 +74,16 @@ public class Pipeline implements VisionPipeline {
         // flou = 2 * flou + 1;
         // Imgproc.GaussianBlur(img, img, new Size(flou, flou), 0, 0);
 
+        Mat img = new Mat();
+        in.copyTo(img);
+
         // Box+Median
-        Imgproc.medianBlur(in, in, kMedian * 2 + 1);
-        Imgproc.boxFilter(in, in, -1, new Size(kFlou * 2 + 1, kFlou * 2 + 1));
+        Imgproc.medianBlur(img, img, kMedian * 2 + 1);
+        Imgproc.boxFilter(img, img, -1, new Size(kFlou * 2 + 1, kFlou * 2 + 1));
 
-        isolerVert(in, kRedThreshold, kBlueThreshold, kThreshold, in);
+        isolerVert(img, kRedThreshold, kBlueThreshold, kThreshold, img);
 
-        List<MatOfPoint> contours = findContours(in);
+        List<MatOfPoint> contours = findContours(img);
 
         Optional<Particule> best = contours.stream().map(contour -> new Particule(contour, kEpsilon))
                 .peek(particule -> drawContour(in, particule.convexHull, kGreen, 4))
@@ -89,9 +97,17 @@ public class Pipeline implements VisionPipeline {
                         && particule.ratioHauteurLargeur <= kMaxRatioHW)
                 .sorted((p1, p2) -> Double.compare(p2.height, p1.height)).findFirst();
 
+        found = false;
+        x = 0;
+        h = 0;
+
         best.ifPresent(p -> {
             drawContour(in, p.contour, kYellow, 2);
             drawParticuleData(in, p, kRed, 2);
+
+            found = true;
+            x = p.x;
+            h = p.height;
         });
 
         snapshotEntry.setString(timestamp + ";" + found + ";" + x + ";" + h);

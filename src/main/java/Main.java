@@ -16,6 +16,7 @@ import edu.wpi.cscore.MjpegServer;
 import edu.wpi.cscore.UsbCamera;
 import edu.wpi.cscore.VideoMode;
 import edu.wpi.first.cameraserver.CameraServer;
+import edu.wpi.first.networktables.EntryListenerFlags;
 import edu.wpi.first.networktables.NetworkTableEntry;
 import edu.wpi.first.networktables.NetworkTableInstance;
 
@@ -25,14 +26,20 @@ public final class Main {
 
   public static Pipeline pipeline;
 
-  private Main() {
-    pipeline = new Pipeline();
-  }
+  private static int kPort = 0;
+  private static int kWidth = 160;
+  private static int kHeight = 120;
+  private static int kFPS = 60;
+  
+  private static NetworkTableEntry doSyncEntry;
+  private static NetworkTableEntry gotSyncEntry;
 
   /**
    * Main.
    */
   public static void main(String... args) {
+    pipeline = new Pipeline();
+
     // start NetworkTables
     NetworkTableInstance ntinst = NetworkTableInstance.getDefault();
     if (Constants.server) {
@@ -43,18 +50,20 @@ public final class Main {
       ntinst.startClientTeam(Constants.team);
     }
 
-    UsbCamera camVision = new UsbCamera("CamVision", K.VISION_CAMERA_PORT);
-    camVision.setVideoMode(VideoMode.PixelFormat.kMJPEG, K.WIDTH_VISION, K.HEIGHT_VISION, K.VISION_FPS);
-    camVision.setExposureManual(0);
+    doSyncEntry = ntinst.getEntry("do_synchronize");
+    gotSyncEntry = ntinst.getEntry("got_synchronize");
+
+    UsbCamera camVision = new UsbCamera("CamVision", kPort);
+    camVision.setVideoMode(VideoMode.PixelFormat.kMJPEG, kWidth, kHeight, kFPS);
+    camVision.setExposureManual(10);
     camVision.getProperty("contrast").set(100);
     camVision.getProperty("saturation").set(50);
     camVision.setWhiteBalanceManual(6500);
-    camVision.setBrightness(0);
-    // camVision.setFPS(K.VISION_FPS);
+    camVision.setBrightness(100);
+    camVision.setFPS(kFPS);
 
 
     // Tentative de connexion...
-
     NetworkTableEntry startVisionEntry = NetworkTableInstance.getDefault().getTable("Vision").getEntry("START_VISION");
     int i = 0;
     while(!startVisionEntry.getBoolean(false)) {
@@ -67,18 +76,25 @@ public final class Main {
       if(i == 5)
         throw new RuntimeException("Impossible de se connecter. Redémarrage...");
     }
-    
+
+    // Synchronization
+    doSyncEntry.addListener(notif -> {
+      gotSyncEntry.setDouble(gotSyncEntry.getDouble(0.0) + 1);
+      ntinst.flush();
+    }, EntryListenerFlags.kNew | EntryListenerFlags.kUpdate);
+
+    NetworkTableInstance.getDefault().getTable("Vision").getEntry("pi_started").setBoolean(true);
 
     CvSink sourceVision =  CameraServer.getInstance().getVideo(camVision);
-    CvSource outputVideoVision = CameraServer.getInstance().putVideo("OutputVision", K.WIDTH_VISION, K.HEIGHT_VISION);
-    outputVideoVision.setFPS(K.VISION_FPS);
+    CvSource outputVideoVision = CameraServer.getInstance().putVideo("OutputVision", kWidth, kHeight);
+    outputVideoVision.setFPS(kFPS);
     
     MjpegServer serverVision = (MjpegServer) CameraServer.getInstance().getServer("serve_OutputVision");
     
     serverVision.setCompression(50);
-    serverVision.setFPS(K.VISION_FPS);
+    serverVision.setFPS(kFPS);
 
-    Mat inputVision = new Mat(K.HEIGHT,K.WIDTH,CvType.CV_8UC3);    
+    Mat inputVision = new Mat(kHeight,kWidth,CvType.CV_8UC3);    
 
     while(true){
       try {
