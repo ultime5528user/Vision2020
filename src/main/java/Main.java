@@ -7,6 +7,7 @@
 
 import java.util.ArrayList;
 
+import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 
@@ -98,6 +99,7 @@ public final class Main {
 
     while(true){
       try {
+        Core.flip(inputVision, inputVision, -1);
 
         //obtenir l'image des caméras
         sourceVision.grabFrame(inputVision);
