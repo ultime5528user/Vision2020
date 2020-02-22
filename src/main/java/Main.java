@@ -18,6 +18,7 @@ import edu.wpi.cscore.UsbCamera;
 import edu.wpi.cscore.VideoMode;
 import edu.wpi.first.cameraserver.CameraServer;
 import edu.wpi.first.networktables.EntryListenerFlags;
+import edu.wpi.first.networktables.NetworkTable;
 import edu.wpi.first.networktables.NetworkTableEntry;
 import edu.wpi.first.networktables.NetworkTableInstance;
 
@@ -28,8 +29,8 @@ public final class Main {
   public static Pipeline pipeline;
 
   private static int kPort = 0;
-  private static int kWidth = 160;
-  private static int kHeight = 120;
+  public static int kWidth = 320;
+  public static int kHeight = 240;
   private static int kFPS = 60;
   
   private static NetworkTableEntry doSyncEntry;
@@ -51,8 +52,10 @@ public final class Main {
       ntinst.startClientTeam(Constants.team);
     }
 
-    doSyncEntry = ntinst.getEntry("do_synchronize");
-    gotSyncEntry = ntinst.getEntry("got_synchronize");
+    NetworkTable visionTable = ntinst.getTable("vision");
+
+    doSyncEntry = visionTable.getEntry("do_synchronize");
+    gotSyncEntry = visionTable.getEntry("got_synchronize");
 
     UsbCamera camVision = new UsbCamera("CamVision", kPort);
     camVision.setVideoMode(VideoMode.PixelFormat.kMJPEG, kWidth, kHeight, kFPS);
@@ -65,7 +68,7 @@ public final class Main {
 
 
     // Tentative de connexion...
-    NetworkTableEntry startVisionEntry = NetworkTableInstance.getDefault().getTable("Vision").getEntry("START_VISION");
+    NetworkTableEntry startVisionEntry = visionTable.getEntry("start_vision");
     int i = 0;
     while(!startVisionEntry.getBoolean(false)) {
       i++;
@@ -80,11 +83,12 @@ public final class Main {
 
     // Synchronization
     doSyncEntry.addListener(notif -> {
+      System.out.println("LISTENER CREATED!!!!");
       gotSyncEntry.setDouble(gotSyncEntry.getDouble(0.0) + 1);
       ntinst.flush();
     }, EntryListenerFlags.kNew | EntryListenerFlags.kUpdate);
 
-    NetworkTableInstance.getDefault().getTable("Vision").getEntry("pi_started").setBoolean(true);
+    visionTable.getEntry("pi_started").setBoolean(true);
 
     CvSink sourceVision =  CameraServer.getInstance().getVideo(camVision);
     CvSource outputVideoVision = CameraServer.getInstance().putVideo("OutputVision", kWidth, kHeight);
@@ -99,10 +103,10 @@ public final class Main {
 
     while(true){
       try {
-        Core.flip(inputVision, inputVision, -1);
-
         //obtenir l'image des caméras
         sourceVision.grabFrame(inputVision);
+
+        Core.flip(inputVision, inputVision, -1);
 
         //traiter l'image de la vision
         pipeline.process(inputVision);

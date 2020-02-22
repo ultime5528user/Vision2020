@@ -1,6 +1,7 @@
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Consumer;
 
 import org.opencv.core.Core;
 import org.opencv.core.CvType;
@@ -16,6 +17,8 @@ import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
 import org.opencv.imgproc.Moments;
 
+import edu.wpi.first.networktables.EntryListenerFlags;
+import edu.wpi.first.networktables.NetworkTable;
 import edu.wpi.first.networktables.NetworkTableEntry;
 import edu.wpi.first.networktables.NetworkTableInstance;
 import edu.wpi.first.vision.VisionPipeline;
@@ -28,25 +31,20 @@ public class Pipeline implements VisionPipeline {
     private static final Scalar kYellow = new Scalar(0, 255, 255);
     private static final Scalar kPurple = new Scalar(255, 0, 255);
 
-    private static final int kWidth = 640;
-    private static final int kHeight = 480;
+    private static int kFlou = 1;
+    private static double kRedThreshold = 1;
+    private static double kBlueThreshold = 1;
+    private static double kThreshold = 15;
+    private static double kEpsilon = .05;
+    private static double kMinPAire = .006;
+    private static double kMinRatioAire = .2;
+    private static double kMaxRatioAire = .45;
+    private static double kMinRatioHW = .27;
+    private static double kMaxRatioHW = .62;
 
-    private final static int kFlou = 2;
-    private final static int kMedian = 3;
-    private final static double kRedThreshold = 1;
-    private final static double kBlueThreshold = 1;
-    private final static double kThreshold = 15;
-    private final static double kEpsilon = .05;
-    private final static double kMinPAire = .006;
-    private final static double kMinRatioAire = .2;
-    private final static double kMaxRatioAire = .45;
-    private final static double kMinRatioHW = 27;
-    private final static double kMaxRatioHW = 62;
-
-    public static NetworkTableInstance ntinst;
+    public static NetworkTable visionTable;
     public static NetworkTableEntry snapshotEntry;
     public static NetworkTableEntry timestampEntry;
-
 
     boolean found;
     double x;
@@ -54,45 +52,55 @@ public class Pipeline implements VisionPipeline {
 
     /**
      * le format "timestamp<long>;found<boolean>;centreX<double>;hauteur<double>"
-    */
+     */
 
     public Pipeline() {
-        ntinst = NetworkTableInstance.getDefault();
-        ntinst.setUpdateRate(10);
+        visionTable = NetworkTableInstance.getDefault().getTable("vision");
+        NetworkTableInstance.getDefault().setUpdateRate(10);
 
-        snapshotEntry = ntinst.getTable("Vision").getEntry("Snapshot");
-        timestampEntry = ntinst.getTable("Vision").getEntry("Timestamp");
+        snapshotEntry = visionTable.getEntry("snapshot");
+        timestampEntry = visionTable.getEntry("timestamp");
+
+        addEntry("kMinPAire", kMinPAire, value -> kMinPAire = value);
+        addEntry("kMinRatioAire", kMinRatioAire, value -> kMinRatioAire = value);
+        addEntry("kMaxRatioAire", kMaxRatioAire, value -> kMaxRatioAire = value);
+    }
+
+    private void addEntry(String nom, double initialValue, Consumer<Double> setter) {
+        NetworkTableEntry entry = visionTable.getEntry(nom);
+        entry.setNumber(initialValue);
+        entry.addListener(notif -> setter.accept(notif.value.getDouble()),
+                EntryListenerFlags.kNew | EntryListenerFlags.kUpdate);
     }
 
     @Override
     public void process(Mat in) {
         long timestamp = timestampEntry.getNumber(0).longValue();
-        
-        // Flou
-        // Gaussian
-        // int flou = viewer.getNumber("flou");
-        // flou = 2 * flou + 1;
-        // Imgproc.GaussianBlur(img, img, new Size(flou, flou), 0, 0);
 
         Mat img = new Mat();
         in.copyTo(img);
 
-        // Box+Median
-        Imgproc.medianBlur(img, img, kMedian * 2 + 1);
-        Imgproc.boxFilter(img, img, -1, new Size(kFlou * 2 + 1, kFlou * 2 + 1));
+        // Flou
+        // Gaussian
+        Imgproc.GaussianBlur(img, img, new Size(kFlou * 2 + 1, kFlou * 2 + 1), 0, 0);
+
+        // // Box+Median
+        // Imgproc.medianBlur(img, img, kMedian * 2 + 1);
+        // Imgproc.boxFilter(img, img, -1, new Size(kFlou * 2 + 1, kFlou * 2 + 1));
 
         isolerVert(img, kRedThreshold, kBlueThreshold, kThreshold, img);
 
         List<MatOfPoint> contours = findContours(img);
 
         Optional<Particule> best = contours.stream().map(contour -> new Particule(contour, kEpsilon))
-                .peek(particule -> drawContour(in, particule.convexHull, kGreen, 4))
-                .peek(particule -> drawContour(in, particule.approxPoly, kBlue, 2))
-                .peek(particule -> drawRotatedRect(in, particule.minAreaRect, kPurple, 3))
+                .peek(particule -> drawContour(in, particule.contour, kRed, 1))
                 .filter(particule -> particule.nbrCotes == 4)
-                .filter(particule -> particule.convexHullArea / (double) (kWidth * kHeight) >= kMinPAire)
+                .peek(particule -> drawContour(in, particule.convexHull, kGreen, 1))
+                .filter(particule -> particule.convexHullArea / (double) (Main.kWidth * Main.kHeight) >= kMinPAire)
+                .peek(particule -> drawContour(in, particule.approxPoly, kBlue, 1))
                 .filter(particule -> particule.ratioAireContourVSConvex >= kMinRatioAire
                         && particule.ratioAireContourVSConvex <= kMaxRatioAire)
+                .peek(particule -> drawRotatedRect(in, particule.minAreaRect, kPurple, 1))
                 .filter(particule -> particule.ratioHauteurLargeur >= kMinRatioHW
                         && particule.ratioHauteurLargeur <= kMaxRatioHW)
                 .sorted((p1, p2) -> Double.compare(p2.height, p1.height)).findFirst();
@@ -121,7 +129,7 @@ public class Pipeline implements VisionPipeline {
 
     private static void drawParticuleData(Mat image, Particule p, Scalar color, int thickness) {
         Imgproc.rectangle(image, p.rect.tl(), p.rect.br(), color, thickness);
-        Imgproc.drawMarker(image, new Point((p.x + 1) / 2 * kWidth, p.rect.br().y - p.rect.height / 2), color,
+        Imgproc.drawMarker(image, new Point((p.x + 1) / 2 * Main.kWidth, p.rect.br().y - p.rect.height / 2), color,
                 Imgproc.MARKER_CROSS, 20, thickness);
     }
 
@@ -222,7 +230,7 @@ public class Pipeline implements VisionPipeline {
             this.convexHull = new MatOfPoint(convexHullPoints);
 
             Moments p = Imgproc.moments(convexHull);
-            this.x = (p.get_m10() / p.get_m00()) * 2 / (double) kWidth - 1;
+            this.x = (p.get_m10() / p.get_m00()) * 2 / (double) Main.kWidth - 1;
             // this.y = (p.get_m01() / p.get_m00());
             // centreX * 2 / (double) this.width - 1;
 
@@ -247,7 +255,7 @@ public class Pipeline implements VisionPipeline {
             }
 
             this.ratioHauteurLargeur = height / width;
-            this.height = height / kHeight;
+            this.height = height / Main.kHeight;
         }
     }
 }
