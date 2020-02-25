@@ -28,11 +28,20 @@ public final class Main {
 
   public static Pipeline pipeline;
 
-  private static int kPort = 0;
+  //vision
+  private static int kPortVision = 0;
   public static int kWidth = 320;
   public static int kHeight = 240;
   private static int kFPS = 60;
-  
+  private static int kCompression = 50;
+
+  //pilote
+  private static int kPortPilote = 1;
+  private static int kWidthPilote = 960;
+  private static int kHeightPilote = 540;
+  private static int kFPSPilote = 60;
+  private static int kCompressionPilote = 50;
+
   private static NetworkTableEntry doSyncEntry;
   private static NetworkTableEntry gotSyncEntry;
 
@@ -57,7 +66,7 @@ public final class Main {
     doSyncEntry = visionTable.getEntry("do_synchronize");
     gotSyncEntry = visionTable.getEntry("got_synchronize");
 
-    UsbCamera camVision = new UsbCamera("CamVision", kPort);
+    UsbCamera camVision = new UsbCamera("CamVision", kPortVision);
     camVision.setVideoMode(VideoMode.PixelFormat.kMJPEG, kWidth, kHeight, kFPS);
     camVision.setExposureManual(10);
     camVision.getProperty("contrast").set(100);
@@ -65,6 +74,9 @@ public final class Main {
     camVision.setWhiteBalanceManual(6500);
     camVision.setBrightness(100);
     camVision.setFPS(kFPS);
+
+    CameraServer.getInstance().startAutomaticCapture(kPortPilote);
+    // startCameraPilote();
 
 
     // Tentative de connexion...
@@ -93,17 +105,15 @@ public final class Main {
     CvSink sourceVision =  CameraServer.getInstance().getVideo(camVision);
     CvSource outputVideoVision = CameraServer.getInstance().putVideo("OutputVision", kWidth, kHeight);
     outputVideoVision.setFPS(kFPS);
-    
+
     MjpegServer serverVision = (MjpegServer) CameraServer.getInstance().getServer("serve_OutputVision");
-    
-    serverVision.setCompression(50);
+    serverVision.setCompression(kCompression); //50
     serverVision.setFPS(kFPS);
 
     Mat inputVision = new Mat(kHeight,kWidth,CvType.CV_8UC3);    
-
     while(true){
       try {
-        //obtenir l'image des caméras
+        //obtenir l'image pour la vision
         sourceVision.grabFrame(inputVision);
 
         Core.flip(inputVision, inputVision, -1);
@@ -111,21 +121,33 @@ public final class Main {
         //traiter l'image de la vision
         pipeline.process(inputVision);
 
-        // if(pipeline.pause) {
-        //   long time = System.currentTimeMillis();
-        //   while(System.currentTimeMillis() - time <= 4000) {
-
-        //     outputVideoVision.putFrame(inputVision);
-        //   }
-        //   pipeline.pause = false;
-        // }
-
         //afficher l'image
         outputVideoVision.putFrame(inputVision);
-
       } catch (Exception e) {
         e.printStackTrace();
       }
     }
+  }
+
+  private static void startCameraPilote() {
+    UsbCamera camPilote = new UsbCamera("CamPilote", kPortPilote);
+    camPilote.setVideoMode(VideoMode.PixelFormat.kMJPEG, kWidthPilote, kHeightPilote, kFPSPilote);
+    camPilote.setFPS(kFPSPilote);
+    
+    CvSink sourcePilote =  CameraServer.getInstance().getVideo(camPilote);
+    CvSource outputVideoPilote = CameraServer.getInstance().putVideo("OutputPilote", kWidthPilote, kHeightPilote);
+    outputVideoPilote.setFPS(kFPSPilote);
+
+    MjpegServer serverPilote = (MjpegServer) CameraServer.getInstance().getServer("serve_OutputPilote");
+    serverPilote.setCompression(kCompressionPilote);
+    serverPilote.setFPS(kFPS);
+
+    Mat outputPilote = new Mat(kHeightPilote,kWidthPilote,CvType.CV_8UC3);    
+    new Thread( () -> {
+      while(!Thread.currentThread().isInterrupted()){
+        sourcePilote.grabFrame(outputPilote);
+        outputVideoPilote.putFrame(outputPilote);
+      }
+    } ).start();
   }
 }
