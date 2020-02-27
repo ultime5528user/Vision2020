@@ -56,7 +56,7 @@ public class Pipeline implements VisionPipeline {
 
     public Pipeline() {
         visionTable = NetworkTableInstance.getDefault().getTable("vision");
-        NetworkTableInstance.getDefault().setUpdateRate(10);
+        // NetworkTableInstance.getDefault().setUpdateRate(10);
 
         snapshotEntry = visionTable.getEntry("snapshot");
         timestampEntry = visionTable.getEntry("timestamp");
@@ -119,6 +119,8 @@ public class Pipeline implements VisionPipeline {
         });
 
         snapshotEntry.setString(timestamp + ";" + found + ";" + x + ";" + h);
+
+        NetworkTableInstance.getDefault().flush();
 
         // draw on original and send to nt?
 

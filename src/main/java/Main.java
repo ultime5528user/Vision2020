@@ -28,14 +28,14 @@ public final class Main {
 
   public static Pipeline pipeline;
 
-  //vision
+  // vision
   private static int kPortVision = 0;
   public static int kWidth = 320;
   public static int kHeight = 240;
   private static int kFPS = 60;
   private static int kCompression = 50;
 
-  //pilote
+  // pilote
   private static int kPortPilote = 1;
   private static int kWidthPilote = 960;
   private static int kHeightPilote = 540;
@@ -44,6 +44,18 @@ public final class Main {
 
   private static NetworkTableEntry doSyncEntry;
   private static NetworkTableEntry gotSyncEntry;
+
+  public static void main2(String... args) {
+    CameraServer.getInstance().startAutomaticCapture(kPortPilote);
+    while (true) {
+      try {
+        Thread.sleep(20);
+      } catch (InterruptedException e) {
+        // TODO Auto-generated catch block
+        e.printStackTrace();
+      }
+    }
+  }
 
   /**
    * Main.
@@ -68,14 +80,14 @@ public final class Main {
 
     UsbCamera camVision = new UsbCamera("CamVision", kPortVision);
     camVision.setVideoMode(VideoMode.PixelFormat.kMJPEG, kWidth, kHeight, kFPS);
-    camVision.setExposureManual(10);
+    camVision.setExposureManual(0);
     camVision.getProperty("contrast").set(100);
     camVision.getProperty("saturation").set(50);
     camVision.setWhiteBalanceManual(6500);
-    camVision.setBrightness(100);
+    camVision.setBrightness(0);
     camVision.setFPS(kFPS);
 
-    CameraServer.getInstance().startAutomaticCapture(kPortPilote);
+    // CameraServer.getInstance().startAutomaticCapture(kPortPilote);
     // startCameraPilote();
 
 
