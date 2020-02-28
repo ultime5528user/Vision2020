@@ -64,6 +64,7 @@ public class Pipeline implements VisionPipeline {
         addEntry("kMinPAire", kMinPAire, value -> kMinPAire = value);
         addEntry("kMinRatioAire", kMinRatioAire, value -> kMinRatioAire = value);
         addEntry("kMaxRatioAire", kMaxRatioAire, value -> kMaxRatioAire = value);
+        addEntry("kEpsilon", kEpsilon, value -> kEpsilon = value);
     }
 
     private void addEntry(String nom, double initialValue, Consumer<Double> setter) {
