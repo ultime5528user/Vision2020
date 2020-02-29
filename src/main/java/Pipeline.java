@@ -23,7 +23,7 @@ import edu.wpi.first.networktables.NetworkTableEntry;
 import edu.wpi.first.networktables.NetworkTableInstance;
 import edu.wpi.first.vision.VisionPipeline;
 
-public class Pipeline implements VisionPipeline {
+public class Pipeline {
 
     private static final Scalar kRed = new Scalar(0, 0, 255);
     private static final Scalar kGreen = new Scalar(0, 255, 0);
@@ -50,6 +50,8 @@ public class Pipeline implements VisionPipeline {
     double x;
     double h;
 
+    Mat img;
+
     /**
      * le format "timestamp<long>;found<boolean>;centreX<double>;hauteur<double>"
      */
@@ -65,6 +67,10 @@ public class Pipeline implements VisionPipeline {
         addEntry("kMinRatioAire", kMinRatioAire, value -> kMinRatioAire = value);
         addEntry("kMaxRatioAire", kMaxRatioAire, value -> kMaxRatioAire = value);
         addEntry("kEpsilon", kEpsilon, value -> kEpsilon = value);
+        addEntry("kRedThreshold", kRedThreshold, value -> kRedThreshold = value);
+        addEntry("kBlueThreshold", kBlueThreshold, value -> kBlueThreshold = value);
+        addEntry("kThreshold", kThreshold, value -> kThreshold = value);
+
     }
 
     private void addEntry(String nom, double initialValue, Consumer<Double> setter) {
@@ -76,9 +82,12 @@ public class Pipeline implements VisionPipeline {
 
     @Override
     public void process(Mat in) {
+        if (img == null) {
+            img = new Mat();
+        }
+
         long timestamp = timestampEntry.getNumber(0).longValue();
 
-        Mat img = new Mat();
         in.copyTo(img);
 
         // Flou
