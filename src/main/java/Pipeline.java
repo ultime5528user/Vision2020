@@ -80,7 +80,6 @@ public class Pipeline {
                 EntryListenerFlags.kNew | EntryListenerFlags.kUpdate);
     }
 
-    @Override
     public void process(Mat in) {
         if (img == null) {
             img = new Mat();
