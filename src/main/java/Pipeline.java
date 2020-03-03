@@ -35,6 +35,10 @@ public class Pipeline {
     private static double kRedThreshold = 1;
     private static double kBlueThreshold = 1;
     private static double kThreshold = 15;
+
+    private static Scalar kThresholdScalar = new Scalar(kThreshold);
+    private static Scalar kMaxThreshold = new Scalar(255);
+
     private static double kEpsilon = .05;
     private static double kMinPAire = .006;
     private static double kMinRatioAire = .2;
@@ -69,7 +73,7 @@ public class Pipeline {
         addEntry("kEpsilon", kEpsilon, value -> kEpsilon = value);
         addEntry("kRedThreshold", kRedThreshold, value -> kRedThreshold = value);
         addEntry("kBlueThreshold", kBlueThreshold, value -> kBlueThreshold = value);
-        addEntry("kThreshold", kThreshold, value -> kThreshold = value);
+        addEntry("kThreshold", kThreshold, value -> kThresholdScalar = new Scalar(value));
 
     }
 
@@ -80,7 +84,7 @@ public class Pipeline {
                 EntryListenerFlags.kNew | EntryListenerFlags.kUpdate);
     }
 
-    public void process(Mat in) {
+    public void process(Mat in, Mat output) {
         if (img == null) {
             img = new Mat();
         }
@@ -88,6 +92,7 @@ public class Pipeline {
         long timestamp = timestampEntry.getNumber(0).longValue();
 
         in.copyTo(img);
+        in.copyTo(output);
 
         // Flou
         // Gaussian
@@ -102,14 +107,14 @@ public class Pipeline {
         List<MatOfPoint> contours = findContours(img);
 
         Optional<Particule> best = contours.stream().map(contour -> new Particule(contour, kEpsilon))
-                .peek(particule -> drawContour(in, particule.contour, kRed, 1))
+                .peek(particule -> drawContour(output, particule.contour, kRed, 1))
                 .filter(particule -> particule.nbrCotes == 4)
-                .peek(particule -> drawContour(in, particule.convexHull, kGreen, 1))
+                .peek(particule -> drawContour(output, particule.convexHull, kGreen, 1))
                 .filter(particule -> particule.convexHullArea / (double) (Main.kWidth * Main.kHeight) >= kMinPAire)
-                .peek(particule -> drawContour(in, particule.approxPoly, kBlue, 1))
+                .peek(particule -> drawContour(output, particule.approxPoly, kBlue, 1))
                 .filter(particule -> particule.ratioAireContourVSConvex >= kMinRatioAire
                         && particule.ratioAireContourVSConvex <= kMaxRatioAire)
-                .peek(particule -> drawRotatedRect(in, particule.minAreaRect, kPurple, 1))
+                .peek(particule -> drawRotatedRect(output, particule.minAreaRect, kPurple, 1))
                 .filter(particule -> particule.ratioHauteurLargeur >= kMinRatioHW
                         && particule.ratioHauteurLargeur <= kMaxRatioHW)
                 .sorted((p1, p2) -> Double.compare(p2.height, p1.height)).findFirst();
@@ -119,8 +124,8 @@ public class Pipeline {
         h = 0;
 
         best.ifPresent(p -> {
-            drawContour(in, p.contour, kYellow, 2);
-            drawParticuleData(in, p, kRed, 2);
+            drawContour(output, p.contour, kYellow, 2);
+            drawParticuleData(output, p, kRed, 2);
 
             found = true;
             x = p.x;
@@ -131,11 +136,9 @@ public class Pipeline {
 
         NetworkTableInstance.getDefault().flush();
 
-        // draw on original and send to nt?
+        // Libérer les ressources mémoires
+        contours.forEach(c -> c.release());
 
-        // for (int i = 0; i < particules.size(); i++) {
-        // Imgproc.drawContours(original, particules, i, kRed, 2);
-        // }
     }
 
     private static void drawParticuleData(Mat image, Particule p, Scalar color, int thickness) {
@@ -170,8 +173,9 @@ public class Pipeline {
 
         redMat.release();
         blueMat.release();
+        greenMat.release();
 
-        Core.inRange(out, new Scalar(threshold), new Scalar(255), out);
+        Core.inRange(out, kThresholdScalar, kMaxThreshold, out);
     }
 
     private static List<MatOfPoint> findContours(Mat input) {
@@ -179,6 +183,7 @@ public class Pipeline {
         List<MatOfPoint> contours = new ArrayList<>();
         int method = Imgproc.CHAIN_APPROX_SIMPLE;
         Imgproc.findContours(input, contours, hierarchy, Imgproc.RETR_LIST, method);
+        hierarchy.release();
         return contours;
     }
 
@@ -190,6 +195,7 @@ public class Pipeline {
         for (int i = 0; i < hullContourIdxList.size(); i++) {
             hullPoints[i] = contourPoints[hullContourIdxList.get(i)];
         }
+        hull.release();
 
         return hullPoints;
     }
@@ -203,6 +209,8 @@ public class Pipeline {
 
         MatOfPoint approx = new MatOfPoint();
         approx2f.convertTo(approx, CvType.CV_32S);
+
+        approx2f.release();
 
         return approx;
     }
@@ -247,7 +255,9 @@ public class Pipeline {
 
             this.convexHullArea = Imgproc.contourArea(convexHull);
 
-            this.approxPoly = approxPoly(new MatOfPoint2f(convexHullPoints), epsilon);
+            MatOfPoint2f convexHullPoints2f = new MatOfPoint2f(convexHullPoints);
+            this.approxPoly = approxPoly(convexHullPoints2f, epsilon);
+            convexHullPoints2f.release();
             this.nbrCotes = this.approxPoly.total();
 
             this.ratioAireContourVSConvex = contourArea / convexHullArea;
@@ -268,5 +278,13 @@ public class Pipeline {
             this.ratioHauteurLargeur = height / width;
             this.height = height / Main.kHeight;
         }
+
+        public void release() {
+            contour.release();
+            contour2f.release();
+            convexHull.release();
+            approxPoly.release();
+        }
+
     }
 }

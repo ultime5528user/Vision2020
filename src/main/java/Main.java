@@ -6,10 +6,14 @@
 /*----------------------------------------------------------------------------*/
 
 import java.util.ArrayList;
+import java.util.List;
 
 import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
+import org.opencv.core.Point;
+import org.opencv.core.Scalar;
+import org.opencv.imgproc.Imgproc;
 
 import edu.wpi.cscore.CvSink;
 import edu.wpi.cscore.CvSource;
@@ -32,8 +36,11 @@ public final class Main {
   private static int kPortVision = 0;
   public static int kWidth = 320;
   public static int kHeight = 240;
-  private static int kFPS = 60;
+  private static int kFPS = 30;
   private static int kCompression = 50;
+  private static Point kCentreHaut = new Point(kWidth, 0);
+  private static Point kCentreBas = new Point(kWidth, kHeight);
+  private static Scalar kWhite = new Scalar(255, 255, 255);
 
   // pilote
   private static int kPortPilote = 1;
@@ -115,14 +122,17 @@ public final class Main {
     visionTable.getEntry("pi_started").setBoolean(true);
 
     CvSink sourceVision =  CameraServer.getInstance().getVideo(camVision);
-    CvSource outputVideoVision = CameraServer.getInstance().putVideo("OutputVision", kWidth, kHeight);
+    CvSource outputVideoVision = CameraServer.getInstance().putVideo("OutputVision", kWidth * 2, kHeight);
     outputVideoVision.setFPS(kFPS);
 
     MjpegServer serverVision = (MjpegServer) CameraServer.getInstance().getServer("serve_OutputVision");
     serverVision.setCompression(kCompression); //50
     serverVision.setFPS(kFPS);
 
-    Mat inputVision = new Mat(kHeight,kWidth,CvType.CV_8UC3);    
+    Mat inputVision = new Mat(kHeight, kWidth, CvType.CV_8UC3);    
+    Mat output = new Mat(kHeight, kWidth, CvType.CV_8UC3);
+    Mat concat = new Mat(kHeight, 2 * kWidth, CvType.CV_8UC3);
+
     while(true){
       try {
         //obtenir l'image pour la vision
@@ -131,10 +141,18 @@ public final class Main {
         Core.flip(inputVision, inputVision, -1);
 
         //traiter l'image de la vision
-        pipeline.process(inputVision);
+        pipeline.process(inputVision, output);
+
+        // Concaténation des deux images
+        inputVision.copyTo(concat.colRange(0, kWidth));
+        output.copyTo(concat.colRange(kWidth, 2 * kWidth));
+
+        // Ligne blanche au centre de l'image
+        Imgproc.line(concat, kCentreHaut, kCentreBas, kWhite);
 
         //afficher l'image
-        outputVideoVision.putFrame(inputVision);
+        outputVideoVision.putFrame(concat);
+
       } catch (Exception e) {
         e.printStackTrace();
       }
