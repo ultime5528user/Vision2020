@@ -1,6 +1,7 @@
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 import org.opencv.core.Core;
@@ -30,6 +31,10 @@ public class Pipeline {
     private static final Scalar kBlue = new Scalar(255, 0, 0);
     private static final Scalar kYellow = new Scalar(0, 255, 255);
     private static final Scalar kPurple = new Scalar(255, 0, 255);
+    private static final Scalar kWhite = new Scalar(255, 255, 255);
+
+    private static final Point kCenterTop = new Point(Main.kWidth / 2, 0);
+    private static final Point kCenterBottom = new Point(Main.kWidth / 2, Main.kHeight);
 
     private static int kFlou = 1;
     private static double kRedThreshold = 1;
@@ -93,6 +98,9 @@ public class Pipeline {
 
         in.copyTo(img);
         in.copyTo(output);
+
+        // Ligne blanche centrale
+        Imgproc.line(output, kCenterTop, kCenterBottom, kPurple, 1);
 
         // Flou
         // Gaussian
